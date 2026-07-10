@@ -1,0 +1,20 @@
+[project]
+name = "search-workshop"
+version = "0.1.0"
+description = "One-hour RedisVL product-search relevance workshop using WANDS."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "redis>=7.1,<8",
+    "redisvl[sentence-transformers,sql-redis]>=0.22.0",
+    "redis-retrieval-optimizer==0.5.1",
+    "sqlglot>=30.12.0",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "python-dotenv>=1.0",
+    "tqdm>=4.66",
+    "jupyterlab>=4.2",
+]
+
+[tool.uv]
+package = false

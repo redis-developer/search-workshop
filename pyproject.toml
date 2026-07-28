@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "search-workshop"
 version = "0.1.0"
@@ -6,15 +10,20 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "redis>=7.1,<8",
-    "redisvl[sentence-transformers,sql-redis]>=0.22.0",
-    "redis-retrieval-optimizer==0.5.1",
-    "sqlglot>=30.12.0",
-    "pandas>=2.2",
+    "redisvl[sentence-transformers]>=0.22.0,<0.25",
+    "pandas>=2.2,<3",
     "numpy>=1.26",
+    "matplotlib>=3.9,<4",
     "python-dotenv>=1.0",
-    "tqdm>=4.66",
+]
+
+[dependency-groups]
+dev = [
     "jupyterlab>=4.2",
 ]
+
+[tool.setuptools]
+packages = []
 
 [tool.uv]
 package = false

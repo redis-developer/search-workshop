@@ -34,13 +34,11 @@ Participants prepare real product-search data, embed product records, index them
 
 ## Run in Google Colab
 
-Open the notebook directly from GitHub:
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb)
+[Open the `colab-migration` notebook directly in Colab](https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb).
 
 Run the notebook from the first cell. The bootstrap section:
 
-1. Clones the `colab-migration` branch into `/content/search-workshop`, including `pyproject.toml`, `.env.example`, data preparation, and metric/evaluation functions.
+1. Clones the `colab-migration` branch into `/content/search-workshop`, including project metadata, environment defaults, data preparation, Redis setup, and evaluation/plotting helpers.
 2. Installs the project dependencies from `pyproject.toml`.
 3. Runs `scripts/setup_colab_redis.py` to install the latest Redis `8.6.*` patch, start it inside the Colab runtime, and verify Search and `FT.HYBRID`.
 4. Downloads and prepares WANDS under the cloned repository before the workshop begins.
@@ -68,7 +66,7 @@ The notebook uses `REDIS_URL` for every Redis client. For a shared classroom Red
 
 ## Redis Cloud
 
-To run against Redis Cloud, update `.env`:
+To run against Redis Cloud, use a database that exposes Redis 8.6.x, Search, and `FT.HYBRID`, then update `.env`:
 
 ```bash
 REDIS_URL=rediss://:<password>@<host>:<port>
@@ -96,7 +94,7 @@ The workshop always indexes all 42,994 products and evaluates all 480 queries wi
 
 WANDS often has many relevant products per query. The notebook defines Recall@25 as a coverage guardrail and explains its natural ceiling before scoring retrieval methods.
 
-Generated WANDS files live under `data/`, which is local and ignored by git.
+Generated WANDS files live under `data/`, which is local and ignored by git. The executable workflow needs only `corpus.json`, `queries.json`, `qrels.json`, and their small `manifest.json`; data preparation does not retain a duplicate JSONL corpus.
 
 ## Data Prep Commands
 

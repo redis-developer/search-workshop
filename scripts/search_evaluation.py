@@ -1,20 +1,19 @@
-#!/usr/bin/env python3
 """Direct, inspectable retrieval evaluation for the WANDS workshop."""
 
 from __future__ import annotations
 
-from functools import partial
 import math
-from time import perf_counter
-from typing import Any, Mapping, Sequence
 import warnings
+from collections.abc import Mapping, Sequence
+from functools import partial
+from time import perf_counter
+from typing import Any
 
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
+from matplotlib.figure import Figure
 from redisvl.query import HybridQuery, TextQuery, VectorQuery
-
 
 DEFAULT_CANDIDATES = {
     "bm25_text": ("text", None),
@@ -56,10 +55,7 @@ STRATEGY_COLORS = {
 
 
 def _discounted_gain(relevance: Sequence[float]) -> float:
-    return sum(
-        grade / math.log2(rank + 1)
-        for rank, grade in enumerate(relevance, start=1)
-    )
+    return sum(grade / math.log2(rank + 1) for rank, grade in enumerate(relevance, start=1))
 
 
 def ndcg_at_k(
@@ -123,8 +119,7 @@ def query_win_counts(per_query: pd.DataFrame) -> dict[str, int]:
     query_best = per_query.groupby("query_id")["ndcg@10"].transform("max")
     winners = per_query[np.isclose(per_query["ndcg@10"], query_best)]
     return {
-        str(name): int(count)
-        for name, count in winners.groupby("search_method").size().items()
+        str(name): int(count) for name, count in winners.groupby("search_method").size().items()
     }
 
 
@@ -145,11 +140,7 @@ def plot_query_ndcg_deltas(
     if baseline not in scores:
         raise ValueError(f"Baseline strategy is missing: {baseline}")
 
-    comparisons = [
-        name
-        for name in DEFAULT_CANDIDATES
-        if name != baseline and name in scores
-    ]
+    comparisons = [name for name in DEFAULT_CANDIDATES if name != baseline and name in scores]
     if not comparisons:
         raise ValueError("At least one non-baseline strategy is required.")
 
@@ -276,10 +267,7 @@ def _scorecard(
         rows.append(
             {
                 "search_method": name,
-                **{
-                    metric: float(method[metric].mean())
-                    for metric in RANKING_METRICS
-                },
+                **{metric: float(method[metric].mean()) for metric in RANKING_METRICS},
                 "ndcg_wins": wins.get(name, 0),
                 **latency_bands_ms(method["latency_ms"]),
             }

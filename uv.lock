@@ -2042,7 +2042,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "redis" },
     { name = "redisvl", extra = ["sentence-transformers"] },
-    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -2058,7 +2057,6 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "redis", specifier = ">=7.1,<8" },
     { name = "redisvl", extras = ["sentence-transformers"], specifier = ">=0.22.0,<0.25" },
-    { name = "tqdm", specifier = ">=4.66" },
 ]
 
 [package.metadata.requires-dev]

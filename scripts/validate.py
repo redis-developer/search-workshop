@@ -1,18 +1,18 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sys
 import tomllib
-
+from pathlib import Path
 
 sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]
 COLAB_NOTEBOOK_URL = "https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
-GITHUB_NOTEBOOK_URL = "https://github.com/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
+GITHUB_NOTEBOOK_URL = (
+    "https://github.com/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
+)
 
 REQUIRED_PATHS = [
     "README.md",
@@ -65,7 +65,17 @@ def check_paths() -> None:
         for path in ROOT.iterdir()
         if path.name not in ALLOWED_TOP_LEVEL
         and not path.name.endswith(".egg-info")
-        and path.name not in {".git", ".venv", "__pycache__", ".ipynb_checkpoints", ".env", ".DS_Store"}
+        and path.name
+        not in {
+            ".git",
+            ".venv",
+            "__pycache__",
+            ".ipynb_checkpoints",
+            ".env",
+            ".DS_Store",
+            "build",
+            "dist",
+        }
     }
     if extras:
         fail(f"Unexpected top-level paths: {', '.join(sorted(extras))}")
@@ -81,13 +91,20 @@ def check_paths() -> None:
     processed = ROOT / "data" / "processed"
     generated = [
         processed / "corpus.json",
-        processed / "corpus.jsonl",
         processed / "queries.json",
         processed / "qrels.json",
         processed / "manifest.json",
     ]
     if not all(path.exists() for path in generated):
-        print("INFO: WANDS data artifacts are not present. Generate them with `python scripts/prep_wands.py`.")
+        print(
+            "INFO: WANDS data artifacts are not present. Generate them with `python scripts/prep_wands.py`."
+        )
+    else:
+        manifest = json.loads((processed / "manifest.json").read_text(encoding="utf-8"))
+        if manifest.get("manifest_version") != 4:
+            fail("Regenerate WANDS data with the compact manifest version 4")
+        if (processed / "corpus.jsonl").exists():
+            fail("Remove the obsolete duplicate data/processed/corpus.jsonl artifact")
 
 
 def check_scripts_compile() -> None:
@@ -109,10 +126,7 @@ def check_notebook() -> None:
     if notebook.get("nbformat") != 4:
         fail("notebook.ipynb must be nbformat 4")
 
-    cell_text = [
-        "".join(cell.get("source", ""))
-        for cell in notebook.get("cells", [])
-    ]
+    cell_text = ["".join(cell.get("source", "")) for cell in notebook.get("cells", [])]
     text = "\n".join(cell_text)
     required_terms = [
         COLAB_NOTEBOOK_URL,
@@ -159,9 +173,15 @@ def check_notebook() -> None:
         fail(f"Notebook is missing workshop terms: {', '.join(missing)}")
 
     clone_cell = next((i for i, value in enumerate(cell_text) if "REPO_URL = " in value), None)
-    install_cell = next((i for i, value in enumerate(cell_text) if "%pip install -q ." in value), None)
-    redis_setup_cell = next((i for i, value in enumerate(cell_text) if "setup_colab_redis()" in value), None)
-    support_import_cell = next((i for i, value in enumerate(cell_text) if "from scripts.prep_wands import" in value), None)
+    install_cell = next(
+        (i for i, value in enumerate(cell_text) if "%pip install -q ." in value), None
+    )
+    redis_setup_cell = next(
+        (i for i, value in enumerate(cell_text) if "setup_colab_redis()" in value), None
+    )
+    support_import_cell = next(
+        (i for i, value in enumerate(cell_text) if "from scripts.prep_wands import" in value), None
+    )
     evaluation_import_cell = next(
         (
             i
@@ -180,7 +200,9 @@ def check_notebook() -> None:
     if any(index is None for index in ordered_cells):
         fail("Notebook is missing one or more ordered Colab setup cells")
     if list(ordered_cells) != sorted(ordered_cells):
-        fail("Notebook must clone artifacts, install dependencies, start Redis, and then import support code")
+        fail(
+            "Notebook must clone artifacts, install dependencies, start Redis, and then import support code"
+        )
 
     forbidden_terms = (
         "redis-retrieval-optimizer",
@@ -246,9 +268,7 @@ def check_notebook() -> None:
 
 
 def check_colab_redis_script() -> None:
-    setup_script = (ROOT / "scripts" / "setup_colab_redis.py").read_text(
-        encoding="utf-8"
-    )
+    setup_script = (ROOT / "scripts" / "setup_colab_redis.py").read_text(encoding="utf-8")
     for term in (
         "def setup_colab_redis(",
         "Pin: version 6:8.6.*",
@@ -261,10 +281,23 @@ def check_colab_redis_script() -> None:
             fail(f"Colab Redis setup script is missing required term: {term}")
 
 
+def check_data_prep_script() -> None:
+    prep_script = (ROOT / "scripts" / "prep_wands.py").read_text(encoding="utf-8")
+    for term in (
+        "def write_structured_data(",
+        '"manifest_version": 4',
+        '(processed_path / "corpus.jsonl").unlink(missing_ok=True)',
+    ):
+        if term not in prep_script:
+            fail(f"WANDS data-prep helper is missing required term: {term}")
+
+    for removed_term in ('"_id":', '"text":', "corpus_jsonl", "write_jsonl"):
+        if removed_term in prep_script:
+            fail(f"Removed optimizer-era data artifact must stay removed: {removed_term}")
+
+
 def check_search_evaluation_script() -> None:
-    evaluation_script = (ROOT / "scripts" / "search_evaluation.py").read_text(
-        encoding="utf-8"
-    )
+    evaluation_script = (ROOT / "scripts" / "search_evaluation.py").read_text(encoding="utf-8")
     for term in (
         "RANKING_METRICS = {",
         "def ndcg_at_k(",
@@ -347,6 +380,8 @@ def check_project_metadata() -> None:
         fail("JupyterLab must not be a Colab runtime dependency")
     if not any(dependency.lower().startswith("matplotlib") for dependency in runtime_dependencies):
         fail("Matplotlib must be a runtime dependency for the benchmark visualization")
+    if any(dependency.lower().startswith("tqdm") for dependency in runtime_dependencies):
+        fail("Unused tqdm must not be a direct runtime dependency")
 
     lock_text = (ROOT / "uv.lock").read_text(encoding="utf-8")
     for package_name in removed_dependencies:
@@ -384,6 +419,7 @@ def check_redis() -> None:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
     try:
         import redis
+        from redis.exceptions import RedisError
     except ModuleNotFoundError:
         print("WARN: Python redis package is not installed. Run `uv sync` before the workshop.")
         return
@@ -391,14 +427,16 @@ def check_redis() -> None:
     try:
         client = redis.from_url(redis_url)
         client.ping()
-    except Exception:
-        print("WARN: Redis unavailable. Start it with `docker compose up -d redis` or check REDIS_URL before running Redis-backed notebook cells.")
+    except (RedisError, ValueError):
+        print(
+            "WARN: Redis unavailable. Start it with `docker compose up -d redis` or check REDIS_URL before running Redis-backed notebook cells."
+        )
         return
 
     redis_version = client.info("server")["redis_version"]
     redis_major_minor = tuple(int(part) for part in redis_version.split(".")[:2])
-    if redis_major_minor < (8, 6):
-        fail(f"Redis 8.6+ is required; connected to {redis_version}")
+    if redis_major_minor != (8, 6):
+        fail(f"Redis 8.6.x is required; connected to {redis_version}")
 
     module_names = set()
     for module in client.module_list():
@@ -418,10 +456,7 @@ def check_redis() -> None:
         if not client.execute_command("COMMAND", "INFO", required_command):
             fail(f"{required_command} is required but unavailable")
 
-    print(
-        f"OK: Redis {redis_version} with Search and "
-        "FT.HYBRID reachable from REDIS_URL"
-    )
+    print(f"OK: Redis {redis_version} with Search and FT.HYBRID reachable from REDIS_URL")
 
 
 def main() -> None:
@@ -430,6 +465,7 @@ def main() -> None:
     check_scripts_compile()
     check_notebook()
     check_colab_redis_script()
+    check_data_prep_script()
     check_search_evaluation_script()
     check_documentation()
     check_project_metadata()

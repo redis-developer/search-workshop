@@ -15,7 +15,6 @@ dependencies = [
     "numpy>=1.26",
     "matplotlib>=3.9,<4",
     "python-dotenv>=1.0",
-    "tqdm>=4.66",
 ]
 
 [dependency-groups]

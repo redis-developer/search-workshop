@@ -3,6 +3,9 @@ data/
 __pycache__/
 .ipynb_checkpoints/
 .pytest_cache/
+.ruff_cache/
+build/
+dist/
 *.pyc
 *.egg-info/
 .env

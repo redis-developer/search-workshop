@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from typing import Any
 
 from redis import Redis
-
+from redis.exceptions import RedisError
 
 COLAB_REDIS_URL = "redis://localhost:6379"
 REDIS_MINOR_VERSION = (8, 6)
@@ -27,6 +26,7 @@ def inspect_redis(redis_url: str = COLAB_REDIS_URL) -> dict[str, Any]:
         "version": "unavailable",
         "modules": set(),
         "commands": set(),
+        "error": None,
     }
     try:
         client = Redis.from_url(
@@ -49,10 +49,7 @@ def inspect_redis(redis_url: str = COLAB_REDIS_URL) -> dict[str, Any]:
 
         available_commands = set()
         for command in REQUIRED_COMMANDS:
-            try:
-                command_info = client.execute_command("COMMAND", "INFO", command)
-            except Exception:
-                command_info = None
+            command_info = client.execute_command("COMMAND", "INFO", command)
             if command_info:
                 available_commands.add(command)
 
@@ -68,8 +65,8 @@ def inspect_redis(redis_url: str = COLAB_REDIS_URL) -> dict[str, Any]:
             and REQUIRED_MODULES <= module_names
             and REQUIRED_COMMANDS <= available_commands
         )
-    except Exception:
-        pass
+    except (KeyError, RedisError, TypeError, ValueError) as exc:
+        state["error"] = str(exc)
     return state
 
 
@@ -97,9 +94,7 @@ def install_redis_86() -> None:
     )
 
     key_download = Path("/tmp/redis-archive-keyring.asc")
-    run_checked(
-        ["curl", "-fsSL", "https://packages.redis.io/gpg", "-o", str(key_download)]
-    )
+    run_checked(["curl", "-fsSL", "https://packages.redis.io/gpg", "-o", str(key_download)])
     run_checked(
         [
             "sudo",
@@ -112,9 +107,7 @@ def install_redis_86() -> None:
             str(key_download),
         ]
     )
-    run_checked(
-        ["sudo", "chmod", "644", "/usr/share/keyrings/redis-archive-keyring.gpg"]
-    )
+    run_checked(["sudo", "chmod", "644", "/usr/share/keyrings/redis-archive-keyring.gpg"])
 
     ubuntu_codename = subprocess.run(
         ["lsb_release", "-cs"],
@@ -207,7 +200,8 @@ def setup_colab_redis(redis_url: str = COLAB_REDIS_URL) -> dict[str, Any]:
             "Redis 8.6 with Search and FT.HYBRID is required; "
             f"version={state['version']}, "
             f"modules={sorted(state['modules'])}, "
-            f"commands={sorted(state['commands'])}"
+            f"commands={sorted(state['commands'])}, "
+            f"error={state['error']}"
         )
     return state
 

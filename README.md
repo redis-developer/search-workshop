@@ -1,7 +1,7 @@
 # Product Search Relevance with RedisVL
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb)
-[View the notebook on GitHub](https://github.com/redis-developer/search-workshop/blob/main/notebook.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb)
+[View the notebook on GitHub](https://github.com/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb)
 
 One-hour engineering workshop for building and evaluating e-commerce product search with RedisVL, Redis Query Engine, WANDS relevance judgments, and Redis Retrieval Optimizer.
 
@@ -36,13 +36,13 @@ Participants prepare real product-search data, embed product records, index them
 
 Open the notebook directly from GitHub:
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb)
 
 Run the notebook from the first cell. The bootstrap section:
 
-1. Clones this complete repository into `/content/search-workshop`, including `pyproject.toml`, `.env.example`, and the supporting Python scripts.
+1. Clones the `colab-migration` branch into `/content/search-workshop`, including `pyproject.toml`, `.env.example`, and the supporting Python scripts.
 2. Installs the project dependencies from `pyproject.toml`.
-3. Installs the latest Redis `8.6.*` patch from the official Redis APT repository, starts it inside the Colab runtime, and verifies Redis Query Engine and `FT.HYBRID`.
+3. Runs `scripts/setup_colab_redis.py` to install the latest Redis `8.6.*` patch, start it inside the Colab runtime, and verify Search, RedisJSON, `FT.HYBRID`, and `JSON.GET`.
 4. Downloads and prepares WANDS under the cloned repository before the workshop begins.
 
 Colab storage and the local Redis process are ephemeral. After a runtime reset, start again from the bootstrap section. Rerunning the bootstrap cells within one live runtime is safe and reuses the existing repository clone and a healthy Redis process.

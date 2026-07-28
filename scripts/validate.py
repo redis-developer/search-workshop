@@ -8,8 +8,8 @@ import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COLAB_NOTEBOOK_URL = "https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb"
-GITHUB_NOTEBOOK_URL = "https://github.com/redis-developer/search-workshop/blob/main/notebook.ipynb"
+COLAB_NOTEBOOK_URL = "https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
+GITHUB_NOTEBOOK_URL = "https://github.com/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
 
 REQUIRED_PATHS = [
     "README.md",
@@ -20,6 +20,7 @@ REQUIRED_PATHS = [
     "docker-compose.yml",
     "notebook.ipynb",
     "scripts/prep_wands.py",
+    "scripts/setup_colab_redis.py",
     "scripts/validate.py",
 ]
 
@@ -86,7 +87,11 @@ def check_paths() -> None:
 
 
 def check_scripts_compile() -> None:
-    for rel in ("scripts/prep_wands.py", "scripts/validate.py"):
+    for rel in (
+        "scripts/prep_wands.py",
+        "scripts/setup_colab_redis.py",
+        "scripts/validate.py",
+    ):
         source = (ROOT / rel).read_text(encoding="utf-8")
         compile(source, str(ROOT / rel), "exec")
 
@@ -107,11 +112,13 @@ def check_notebook() -> None:
     required_terms = [
         COLAB_NOTEBOOK_URL,
         "https://github.com/redis-developer/search-workshop.git",
+        "REPO_REF = 'colab-migration'",
         "/content/search-workshop",
         "%pip install -q .",
-        "Pin: version 6:8.6.*",
-        "/usr/lib/redis/modules/redisearch.so",
-        "COMMAND', 'INFO', 'FT.HYBRID",
+        "scripts/setup_colab_redis.py",
+        "from scripts.setup_colab_redis import",
+        "setup_colab_redis()",
+        "JSON.GET",
         "WANDS",
         "search_text",
         "VectorQuery",
@@ -137,7 +144,7 @@ def check_notebook() -> None:
 
     clone_cell = next((i for i, value in enumerate(cell_text) if "REPO_URL = " in value), None)
     install_cell = next((i for i, value in enumerate(cell_text) if "%pip install -q ." in value), None)
-    redis_setup_cell = next((i for i, value in enumerate(cell_text) if "Pin: version 6:8.6.*" in value), None)
+    redis_setup_cell = next((i for i, value in enumerate(cell_text) if "setup_colab_redis()" in value), None)
     support_import_cell = next((i for i, value in enumerate(cell_text) if "from scripts.prep_wands import" in value), None)
     ordered_cells = (clone_cell, install_cell, redis_setup_cell, support_import_cell)
     if any(index is None for index in ordered_cells):
@@ -148,6 +155,23 @@ def check_notebook() -> None:
     display_name = notebook.get("metadata", {}).get("kernelspec", {}).get("display_name")
     if display_name != "Python 3":
         fail("Notebook kernelspec display name must be Python 3 for Colab portability")
+
+
+def check_colab_redis_script() -> None:
+    setup_script = (ROOT / "scripts" / "setup_colab_redis.py").read_text(
+        encoding="utf-8"
+    )
+    for term in (
+        "def setup_colab_redis(",
+        "Pin: version 6:8.6.*",
+        "/usr/lib/redis/modules/rejson.so",
+        "/usr/lib/redis/modules/redisearch.so",
+        '"FT.HYBRID"',
+        '"JSON.GET"',
+        'REQUIRED_MODULES = {"search", "rejson"}',
+    ):
+        if term not in setup_script:
+            fail(f"Colab Redis setup script is missing required term: {term}")
 
 
 def check_documentation() -> None:
@@ -227,13 +251,21 @@ def check_redis() -> None:
             name = name.decode("utf-8")
         if name:
             module_names.add(str(name).lower())
-    if "search" not in module_names:
-        fail(f"Redis Search is required; loaded modules: {sorted(module_names)}")
+    missing_modules = {"search", "rejson"} - module_names
+    if missing_modules:
+        fail(
+            "Redis Search and RedisJSON are required; "
+            f"missing={sorted(missing_modules)}, loaded={sorted(module_names)}"
+        )
 
-    if not client.execute_command("COMMAND", "INFO", "FT.HYBRID"):
-        fail("FT.HYBRID is required but unavailable")
+    for required_command in ("FT.HYBRID", "JSON.GET"):
+        if not client.execute_command("COMMAND", "INFO", required_command):
+            fail(f"{required_command} is required but unavailable")
 
-    print(f"OK: Redis {redis_version} with Search and FT.HYBRID reachable from REDIS_URL")
+    print(
+        f"OK: Redis {redis_version} with Search, RedisJSON, "
+        "FT.HYBRID, and JSON.GET reachable from REDIS_URL"
+    )
 
 
 def main() -> None:
@@ -241,6 +273,7 @@ def main() -> None:
     check_paths()
     check_scripts_compile()
     check_notebook()
+    check_colab_redis_script()
     check_documentation()
     check_project_metadata()
     check_env_example()

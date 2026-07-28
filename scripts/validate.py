@@ -4,8 +4,11 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import sys
 import tomllib
 
+
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]
 COLAB_NOTEBOOK_URL = "https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
@@ -20,8 +23,8 @@ REQUIRED_PATHS = [
     "docker-compose.yml",
     "notebook.ipynb",
     "scripts/prep_wands.py",
+    "scripts/search_evaluation.py",
     "scripts/setup_colab_redis.py",
-    "scripts/workshop_search_study.py",
     "scripts/validate.py",
 ]
 
@@ -90,8 +93,8 @@ def check_paths() -> None:
 def check_scripts_compile() -> None:
     for rel in (
         "scripts/prep_wands.py",
+        "scripts/search_evaluation.py",
         "scripts/setup_colab_redis.py",
-        "scripts/workshop_search_study.py",
         "scripts/validate.py",
     ):
         source = (ROOT / rel).read_text(encoding="utf-8")
@@ -118,10 +121,9 @@ def check_notebook() -> None:
         "/content/search-workshop",
         "%pip install -q .",
         "scripts/setup_colab_redis.py",
-        "scripts/workshop_search_study.py",
+        "scripts/search_evaluation.py",
         "from scripts.setup_colab_redis import",
         "setup_colab_redis()",
-        "JSON.GET",
         "WANDS",
         "search_text",
         "VectorQuery",
@@ -133,18 +135,24 @@ def check_notebook() -> None:
         "Fine-tuned embedding model",
         "ANN Recall@k",
         "Redis Search",
-        "Define the Scorecard Once",
+        "Waiting for Redis Search background indexing to finish",
+        "Evaluate Six Ranking Strategies Head to Head",
+        "Define the Metrics as Functions",
+        "RANKING_METRICS",
+        "metric_definitions_frame",
+        "run_search_comparison",
+        "mean_latency_ms",
+        "p50_latency_ms",
+        "p95_latency_ms",
+        "p99_latency_ms",
+        "ndcg_wins",
+        "Draw Conclusions",
         "Reference Guide",
         "nDCG@10",
         "Recall@25",
         "Precision@25",
-        "avg_redis_query_ms",
-        "from scripts.workshop_search_study import run_workshop_search_study",
-        "selected_files['queries']",
-        "selected_files['qrels']",
         "WORKSHOP_RUN_ID",
-        "Production checklist",
-        "recommendation",
+        "Next experiment",
     ]
     missing = [term for term in required_terms if term not in text]
     if missing:
@@ -154,11 +162,11 @@ def check_notebook() -> None:
     install_cell = next((i for i, value in enumerate(cell_text) if "%pip install -q ." in value), None)
     redis_setup_cell = next((i for i, value in enumerate(cell_text) if "setup_colab_redis()" in value), None)
     support_import_cell = next((i for i, value in enumerate(cell_text) if "from scripts.prep_wands import" in value), None)
-    study_import_cell = next(
+    evaluation_import_cell = next(
         (
             i
             for i, value in enumerate(cell_text)
-            if "from scripts.workshop_search_study import" in value
+            if "from scripts.search_evaluation import" in value
         ),
         None,
     )
@@ -167,14 +175,22 @@ def check_notebook() -> None:
         install_cell,
         redis_setup_cell,
         support_import_cell,
-        study_import_cell,
+        evaluation_import_cell,
     )
     if any(index is None for index in ordered_cells):
         fail("Notebook is missing one or more ordered Colab setup cells")
     if list(ordered_cells) != sorted(ordered_cells):
         fail("Notebook must clone artifacts, install dependencies, start Redis, and then import support code")
 
-    legacy_adapter_terms = (
+    forbidden_terms = (
+        "redis-retrieval-optimizer",
+        "redis_retrieval_optimizer",
+        "Redis Retrieval Optimizer",
+        "run_search_study",
+        "workshop_search_study",
+        "ranx",
+        "optimizer_df",
+        "study_result",
         "def rows_to_scores",
         "def run_query_method",
         "def make_hybrid_method",
@@ -182,24 +198,15 @@ def check_notebook() -> None:
         "study_qrels_path",
         "avg_query_ms",
     )
-    leaked_terms = [term for term in legacy_adapter_terms if term in text]
+    leaked_terms = [term for term in forbidden_terms if term in text]
     if leaked_terms:
         fail(
-            "Optimizer adapter and duplicate artifact code must stay out of the "
-            f"notebook: {', '.join(leaked_terms)}"
+            "Removed optimizer and adapter code must stay out of the notebook: "
+            f"{', '.join(leaked_terms)}"
         )
 
-    for metric_row in (
-        "| nDCG@10 |",
-        "| Recall@25 |",
-        "| Precision@25 |",
-        "| Average Redis query time (`avg_redis_query_ms`) |",
-    ):
-        if text.count(metric_row) != 1:
-            fail(
-                "Each canonical scorecard definition must appear exactly once; "
-                f"found {text.count(metric_row)} occurrences of {metric_row}"
-            )
+    if text.count("from scripts.search_evaluation import") != 1:
+        fail("Notebook must import the canonical evaluation module exactly once")
 
     display_name = notebook.get("metadata", {}).get("kernelspec", {}).get("display_name")
     if display_name != "Python 3":
@@ -213,33 +220,66 @@ def check_colab_redis_script() -> None:
     for term in (
         "def setup_colab_redis(",
         "Pin: version 6:8.6.*",
-        "/usr/lib/redis/modules/rejson.so",
         "/usr/lib/redis/modules/redisearch.so",
         '"FT.HYBRID"',
-        '"JSON.GET"',
-        'REQUIRED_MODULES = {"search", "rejson"}',
+        'REQUIRED_MODULES = {"search"}',
+        'REQUIRED_COMMANDS = {"FT.HYBRID"}',
     ):
         if term not in setup_script:
             fail(f"Colab Redis setup script is missing required term: {term}")
 
 
-def check_workshop_search_study_script() -> None:
-    study_script = (ROOT / "scripts" / "workshop_search_study.py").read_text(
+def check_search_evaluation_script() -> None:
+    evaluation_script = (ROOT / "scripts" / "search_evaluation.py").read_text(
         encoding="utf-8"
     )
     for term in (
-        'SCORECARD_METRICS = ("ndcg@10", "recall@25", "precision@25")',
-        "LINEAR_TEXT_WEIGHTS = (0.25, 0.50, 0.75)",
-        "def run_workshop_search_study(",
-        '"avg_redis_query_ms"',
-        "RedisJSONPath.root_path()",
-        "NumbaTypeSafetyWarning",
+        "METRIC_DEFINITIONS = (",
+        "RANKING_METRICS = {",
+        "def ndcg_at_k(",
+        "def recall_at_k(",
+        "def precision_at_k(",
+        "def latency_bands_ms(",
+        "def query_win_counts(",
+        "def run_search_comparison(",
+        "def summarize_comparison(",
         '"bm25_text"',
         '"vector_cosine"',
         '"hybrid_rrf"',
+        '"hybrid_linear_text_025"',
+        '"hybrid_linear_text_050"',
+        '"hybrid_linear_text_075"',
+        '"mean_latency_ms"',
+        '"p50_latency_ms"',
+        '"p95_latency_ms"',
+        '"p99_latency_ms"',
     ):
-        if term not in study_script:
-            fail(f"Workshop search-study helper is missing required term: {term}")
+        if term not in evaluation_script:
+            fail(f"Search-evaluation helper is missing required term: {term}")
+
+    from search_evaluation import (
+        DEFAULT_CANDIDATES,
+        SCORECARD_COLUMNS,
+        latency_bands_ms,
+        ndcg_at_k,
+        precision_at_k,
+        recall_at_k,
+    )
+
+    judgments = {"exact": 2, "partial": 1, "irrelevant": 0}
+    ranking = ["partial", "missing", "exact"]
+    ideal_gain = 2 + (1 / 1.584962500721156)
+    observed_gain = 1 + (2 / 2)
+    if abs(ndcg_at_k(judgments, ranking, 3) - observed_gain / ideal_gain) > 1e-12:
+        fail("nDCG@k implementation does not match the documented graded formula")
+    if recall_at_k(judgments, ranking, 3) != 1.0:
+        fail("Recall@k implementation failed its known-value check")
+    if precision_at_k(judgments, ranking, 3) != 2 / 3:
+        fail("Precision@k implementation failed its known-value check")
+    if latency_bands_ms([1, 2, 3])["p95_latency_ms"] != 2.9:
+        fail("Latency percentile implementation failed its known-value check")
+    if len(DEFAULT_CANDIDATES) != 6 or len(SCORECARD_COLUMNS) != 9:
+        fail("Workshop must compare six strategies in the nine-column scorecard")
 
 
 def check_documentation() -> None:
@@ -251,6 +291,7 @@ def check_documentation() -> None:
         "## Run Locally",
         "/content/search-workshop",
         "pyproject.toml",
+        "scripts/search_evaluation.py",
         "8.6.*",
     ):
         if term not in readme:
@@ -262,8 +303,17 @@ def check_project_metadata() -> None:
         project_config = tomllib.load(handle)
 
     runtime_dependencies = project_config.get("project", {}).get("dependencies", [])
+    removed_dependencies = ("redis-retrieval-optimizer", "ranx", "optuna")
+    for dependency in runtime_dependencies:
+        if dependency.lower().startswith(removed_dependencies):
+            fail(f"Removed evaluation dependency remains in pyproject.toml: {dependency}")
     if any(dependency.lower().startswith("jupyterlab") for dependency in runtime_dependencies):
         fail("JupyterLab must not be a Colab runtime dependency")
+
+    lock_text = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    for package_name in removed_dependencies:
+        if f'name = "{package_name}"' in lock_text:
+            fail(f"Removed evaluation dependency remains in uv.lock: {package_name}")
 
     dev_dependencies = project_config.get("dependency-groups", {}).get("dev", [])
     if not any(dependency.lower().startswith("jupyterlab") for dependency in dev_dependencies):
@@ -319,20 +369,20 @@ def check_redis() -> None:
             name = name.decode("utf-8")
         if name:
             module_names.add(str(name).lower())
-    missing_modules = {"search", "rejson"} - module_names
+    missing_modules = {"search"} - module_names
     if missing_modules:
         fail(
-            "Redis Search and RedisJSON are required; "
+            "Redis Search is required; "
             f"missing={sorted(missing_modules)}, loaded={sorted(module_names)}"
         )
 
-    for required_command in ("FT.HYBRID", "JSON.GET"):
+    for required_command in ("FT.HYBRID",):
         if not client.execute_command("COMMAND", "INFO", required_command):
             fail(f"{required_command} is required but unavailable")
 
     print(
-        f"OK: Redis {redis_version} with Search, RedisJSON, "
-        "FT.HYBRID, and JSON.GET reachable from REDIS_URL"
+        f"OK: Redis {redis_version} with Search and "
+        "FT.HYBRID reachable from REDIS_URL"
     )
 
 
@@ -342,7 +392,7 @@ def main() -> None:
     check_scripts_compile()
     check_notebook()
     check_colab_redis_script()
-    check_workshop_search_study_script()
+    check_search_evaluation_script()
     check_documentation()
     check_project_metadata()
     check_env_example()

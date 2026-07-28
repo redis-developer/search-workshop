@@ -13,8 +13,8 @@ from redis import Redis
 
 COLAB_REDIS_URL = "redis://localhost:6379"
 REDIS_MINOR_VERSION = (8, 6)
-REQUIRED_MODULES = {"search", "rejson"}
-REQUIRED_COMMANDS = {"FT.HYBRID", "JSON.GET"}
+REQUIRED_MODULES = {"search"}
+REQUIRED_COMMANDS = {"FT.HYBRID"}
 
 
 def run_checked(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
@@ -173,7 +173,6 @@ def start_redis_with_required_modules() -> None:
 
     redis_server = shutil.which("redis-server")
     module_paths = [
-        Path("/usr/lib/redis/modules/rejson.so"),
         Path("/usr/lib/redis/modules/redisearch.so"),
     ]
     missing_paths = [str(path) for path in module_paths if not path.is_file()]
@@ -205,7 +204,7 @@ def setup_colab_redis(redis_url: str = COLAB_REDIS_URL) -> dict[str, Any]:
 
     if not state["ready"]:
         raise RuntimeError(
-            "Redis 8.6 with Search, RedisJSON, FT.HYBRID, and JSON.GET is required; "
+            "Redis 8.6 with Search and FT.HYBRID is required; "
             f"version={state['version']}, "
             f"modules={sorted(state['modules'])}, "
             f"commands={sorted(state['commands'])}"

@@ -1,7 +1,7 @@
 # Product Search Relevance with RedisVL
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb)
-[View the notebook on GitHub](https://github.com/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb)
+[View the notebook on GitHub](https://github.com/redis-developer/search-workshop/blob/main/notebook.ipynb)
 
 One-hour engineering workshop for building and evaluating e-commerce product search with RedisVL, Redis Query Engine, and WANDS relevance judgments.
 
@@ -34,11 +34,11 @@ Participants prepare real product-search data, embed product records, index them
 
 ## Run in Google Colab
 
-[Open the `colab-migration` notebook directly in Colab](https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb).
+[Open the `main` notebook directly in Colab](https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb).
 
 Run the notebook from the first cell. The bootstrap section:
 
-1. Clones the `colab-migration` branch into `/content/search-workshop`, including project metadata, environment defaults, data preparation, Redis setup, and evaluation/plotting helpers.
+1. Clones the `main` branch into `/content/search-workshop`, including project metadata, environment defaults, data preparation, Redis setup, and evaluation/plotting helpers.
 2. Installs the project dependencies from `pyproject.toml`.
 3. Runs `scripts/setup_colab_redis.py` to install the latest Redis `8.6.*` patch, start it inside the Colab runtime, and verify Search and `FT.HYBRID`.
 4. Downloads and prepares WANDS under the cloned repository before the workshop begins.

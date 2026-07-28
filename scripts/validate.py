@@ -9,10 +9,8 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]
-COLAB_NOTEBOOK_URL = "https://colab.research.google.com/github/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
-GITHUB_NOTEBOOK_URL = (
-    "https://github.com/redis-developer/search-workshop/blob/colab-migration/notebook.ipynb"
-)
+COLAB_NOTEBOOK_URL = "https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb"
+GITHUB_NOTEBOOK_URL = "https://github.com/redis-developer/search-workshop/blob/main/notebook.ipynb"
 
 REQUIRED_PATHS = [
     "README.md",
@@ -131,7 +129,7 @@ def check_notebook() -> None:
     required_terms = [
         COLAB_NOTEBOOK_URL,
         "https://github.com/redis-developer/search-workshop.git",
-        "REPO_REF = 'colab-migration'",
+        "REPO_REF = 'main'",
         "/content/search-workshop",
         "%pip install -q .",
         "scripts/setup_colab_redis.py",
@@ -144,9 +142,9 @@ def check_notebook() -> None:
         "filtered vector",
         "Numeric Filter",
         "hybrid",
-        "#### `FLAT`",
-        "#### `HNSW`",
-        "#### `SVS-VAMANA`",
+        "#### **FLAT",
+        "#### **HNSW",
+        "#### **SVS-VAMANA",
         "SVS-VAMANA",
         "Hosted embedding API",
         "Fine-tuned embedding model",
@@ -155,9 +153,9 @@ def check_notebook() -> None:
         "Waiting for Redis Search background indexing to finish",
         "Evaluate Six Ranking Strategies Head to Head",
         "Ranking Metrics",
-        "#### nDCG@10",
-        "#### Recall@25",
-        "#### Precision@25",
+        "#### **nDCG@10",
+        "#### **Recall@25",
+        "#### **Precision@25",
         "plot_query_ndcg_deltas",
         "run_search_comparison",
         "Draw Conclusions",
@@ -166,7 +164,6 @@ def check_notebook() -> None:
         "Recall@25",
         "Precision@25",
         "WORKSHOP_RUN_ID",
-        "Next experiment",
     ]
     missing = [term for term in required_terms if term not in text]
     if missing:
@@ -242,7 +239,7 @@ def check_notebook() -> None:
         fail("Notebook is missing its vector-index comparison cell")
     if "|" in index_cell:
         fail("Vector index types must use readable subsections, not a table")
-    for heading in ("#### `FLAT`", "#### `HNSW`", "#### `SVS-VAMANA`"):
+    for heading in ("#### **FLAT", "#### **HNSW", "#### **SVS-VAMANA"):
         if text.count(heading) != 1:
             fail(f"Vector index type must have exactly one subsection: {heading}")
 
@@ -258,7 +255,7 @@ def check_notebook() -> None:
         fail("Notebook is missing its canonical ranking-metrics cell")
     if "|" in metric_cell:
         fail("Ranking metrics must be explained in prose, not a generated table")
-    for heading in ("#### nDCG@10", "#### Recall@25", "#### Precision@25"):
+    for heading in ("#### **nDCG@10", "#### **Recall@25", "#### **Precision@25"):
         if text.count(heading) != 1:
             fail(f"Ranking metric must have exactly one canonical heading: {heading}")
 

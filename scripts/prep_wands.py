@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import re
 import tempfile
 import urllib.request
@@ -40,7 +39,6 @@ RELEVANCE_MAP = {
     "Partial": 1,
     "Irrelevant": 0,
 }
-SAMPLE_STRATEGY_VERSION = 2
 
 
 def clean_text(value: Any) -> str:
@@ -158,65 +156,6 @@ def load_wands(raw_dir: Path, download: bool = True, force_download: bool = Fals
     return products, queries, labels, source_summary
 
 
-def choose_sample(
-    products: pd.DataFrame,
-    queries: pd.DataFrame,
-    labels: pd.DataFrame,
-    max_products: int,
-    max_queries: int,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    if max_products < 1:
-        raise ValueError("max_products must be at least 1")
-    if max_queries < 1:
-        raise ValueError("max_queries must be at least 1")
-
-    positives = labels[labels["relevance"] > 0]
-    query_priority = (
-        positives.groupby("query_id")["relevance"]
-        .agg(["max", "sum", "count"])
-        .sort_values(["max", "sum", "count"], ascending=False)
-    )
-    selected_query_ids = query_priority.head(max_queries).index.tolist()
-    selected_positive_labels = positives[positives["query_id"].isin(selected_query_ids)].copy()
-
-    required_product_ids: set[str] = set()
-    usable_query_ids: list[str] = []
-    for query_id in selected_query_ids:
-        query_positives = selected_positive_labels[selected_positive_labels["query_id"] == query_id]
-        if query_positives.empty:
-            continue
-        best_label = query_positives.sort_values(
-            ["relevance", "product_id"],
-            ascending=[False, True],
-        ).iloc[0]
-        product_id = str(best_label["product_id"])
-        if len(required_product_ids) >= max_products and product_id not in required_product_ids:
-            continue
-        required_product_ids.add(product_id)
-        usable_query_ids.append(str(query_id))
-
-    sample_labels = labels[labels["query_id"].isin(usable_query_ids)].copy()
-
-    product_priority = (
-        sample_labels.groupby("product_id")["relevance"]
-        .agg(["max", "sum", "count"])
-        .sort_values(["max", "sum", "count"], ascending=False)
-    )
-    selected_product_ids = set(required_product_ids)
-    for product_id in product_priority.index.astype(str):
-        if len(selected_product_ids) >= max_products:
-            break
-        selected_product_ids.add(product_id)
-
-    sample_labels = sample_labels[sample_labels["product_id"].isin(selected_product_ids)].copy()
-
-    usable_query_ids = set(sample_labels[sample_labels["relevance"] > 0]["query_id"].unique())
-    sample_queries = queries[queries["query_id"].isin(usable_query_ids)].copy()
-    sample_labels = sample_labels[sample_labels["query_id"].isin(set(sample_queries["query_id"]))].copy()
-    sample_products = products[products["product_id"].isin(selected_product_ids)].copy()
-    return sample_products, sample_queries, sample_labels
-
-
 def product_record(row: pd.Series) -> dict[str, Any]:
     return {
         "id": str(row["product_id"]),
@@ -247,8 +186,9 @@ def make_queries(queries: pd.DataFrame) -> dict[str, str]:
 
 def make_qrels(labels: pd.DataFrame) -> dict[str, dict[str, int]]:
     qrels: dict[str, dict[str, int]] = {}
-    for _, row in labels.iterrows():
-        qrels.setdefault(str(row["query_id"]), {})[str(row["product_id"])] = int(row["relevance"])
+    pair_relevance = labels.groupby(["query_id", "product_id"])["relevance"].max()
+    for (query_id, product_id), relevance in pair_relevance.items():
+        qrels.setdefault(str(query_id), {})[str(product_id)] = int(relevance)
     return qrels
 
 
@@ -272,28 +212,21 @@ def portable_path(path: Path) -> str:
         return str(path)
 
 
-def existing_manifest(
-    processed_dir: Path,
-    max_products: int,
-    max_queries: int,
-) -> dict[str, Any] | None:
+def existing_manifest(processed_dir: Path) -> dict[str, Any] | None:
     manifest_path = processed_dir / "manifest.json"
     required = [
-        processed_dir / "corpus_sample.json",
-        processed_dir / "corpus_sample.jsonl",
-        processed_dir / "queries_sample.json",
-        processed_dir / "qrels_sample.json",
+        processed_dir / "corpus.json",
+        processed_dir / "corpus.jsonl",
+        processed_dir / "queries.json",
+        processed_dir / "qrels.json",
         manifest_path,
     ]
     if not all(path.exists() for path in required):
         return None
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    sample = manifest.get("sample", {})
-    if sample.get("requested_products") != max_products:
+    if manifest.get("manifest_version") != 3:
         return None
-    if sample.get("requested_queries") != max_queries:
-        return None
-    if manifest.get("sample_strategy_version") != SAMPLE_STRATEGY_VERSION:
+    if set(manifest.get("files", {})) != {"full"}:
         return None
     return manifest
 
@@ -333,21 +266,15 @@ def write_structured_split(
 def prepare_wands(
     raw_dir: str | Path = "data/raw",
     processed_dir: str | Path = "data/processed",
-    max_products: int | None = None,
-    max_queries: int | None = None,
     download: bool = True,
     force_download: bool = False,
     refresh: bool = False,
-    full: bool = False,
 ) -> dict[str, Any]:
     raw_path = Path(raw_dir)
     processed_path = Path(processed_dir)
     processed_path.mkdir(parents=True, exist_ok=True)
-    max_products = max_products or int(os.getenv("SAMPLE_PRODUCT_COUNT", "600"))
-    max_queries = max_queries or int(os.getenv("SAMPLE_QUERY_COUNT", "24"))
-
-    if not refresh and not force_download and not full:
-        manifest = existing_manifest(processed_path, max_products, max_queries)
+    if not refresh and not force_download:
+        manifest = existing_manifest(processed_path)
         if manifest is not None:
             return manifest
 
@@ -357,48 +284,23 @@ def prepare_wands(
         force_download=force_download,
     )
 
-    sample_products, sample_queries, sample_labels = choose_sample(
-        products=products,
-        queries=queries,
-        labels=labels,
-        max_products=max_products,
-        max_queries=max_queries,
-    )
-
-    sample_files = write_structured_split(
-        sample_products,
-        sample_queries,
-        sample_labels,
+    full_files = write_structured_split(
+        products,
+        queries,
+        labels,
         processed_path,
-        "_sample",
+        "",
     )
-
-    files: dict[str, Any] = {"sample": sample_files}
-    if full:
-        files["full"] = write_structured_split(products, queries, labels, processed_path, "")
 
     manifest = {
+        "manifest_version": 3,
         "dataset": "WANDS",
         "source": source_summary,
         "raw_dir": portable_path(raw_path),
         "processed_dir": portable_path(processed_path),
-        "sample": {
-            "enabled": True,
-            "requested_products": max_products,
-            "requested_queries": max_queries,
-            "products": int(sample_files["products"]),
-            "queries": int(sample_files["queries_count"]),
-            "qrels": int(sample_files["qrels_count"]),
-        },
-        "full_outputs_written": full,
-        "sample_strategy_version": SAMPLE_STRATEGY_VERSION,
-        "sample_note": (
-            "The sampler prioritizes judged queries and keeps at least one relevant product per query "
-            "when the product budget allows it. Actual query count can still be lower than requested "
-            "if the product budget is smaller than the query budget or the source data has too few judged positives."
-        ),
+        "full_outputs_written": True,
         "relevance_map": RELEVANCE_MAP,
-        "files": files,
+        "files": {"full": full_files},
     }
     write_json(processed_path / "manifest.json", manifest)
     return manifest
@@ -408,12 +310,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download and structure WANDS for the RedisVL workshop.")
     parser.add_argument("--raw-dir", default="data/raw")
     parser.add_argument("--processed-dir", default="data/processed")
-    parser.add_argument("--sample-products", type=int, default=None)
-    parser.add_argument("--sample-queries", type=int, default=None)
-    parser.add_argument("--full", action="store_true", help="Also write full corpus/query/qrels outputs.")
     parser.add_argument("--no-download", action="store_true")
     parser.add_argument("--force-download", action="store_true")
-    parser.add_argument("--refresh", action="store_true", help="Rebuild processed artifacts even if sample outputs already exist.")
+    parser.add_argument("--refresh", action="store_true", help="Rebuild processed artifacts even if full outputs already exist.")
     parser.add_argument("--list-sources", action="store_true", help="Print WANDS source URLs and exit.")
     return parser.parse_args()
 
@@ -427,12 +326,9 @@ def main() -> None:
     manifest = prepare_wands(
         raw_dir=args.raw_dir,
         processed_dir=args.processed_dir,
-        max_products=args.sample_products,
-        max_queries=args.sample_queries,
         download=not args.no_download,
         force_download=args.force_download,
         refresh=args.refresh,
-        full=args.full,
     )
     print(json.dumps(manifest, indent=2))
 

@@ -2529,9 +2529,6 @@ wheels = [
 sentence-transformers = [
     { name = "sentence-transformers" },
 ]
-sql-redis = [
-    { name = "sql-redis" },
-]
 
 [[package]]
 name = "referencing"
@@ -2827,29 +2824,33 @@ name = "search-workshop"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "jupyterlab" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "python-dotenv" },
     { name = "redis" },
     { name = "redis-retrieval-optimizer" },
-    { name = "redisvl", extra = ["sentence-transformers", "sql-redis"] },
-    { name = "sqlglot" },
+    { name = "redisvl", extra = ["sentence-transformers"] },
     { name = "tqdm" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "jupyterlab" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "jupyterlab", specifier = ">=4.2" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "redis", specifier = ">=7.1,<8" },
     { name = "redis-retrieval-optimizer", specifier = "==0.5.1" },
-    { name = "redisvl", extras = ["sentence-transformers", "sql-redis"], specifier = ">=0.22.0" },
-    { name = "sqlglot", specifier = ">=30.12.0" },
+    { name = "redisvl", extras = ["sentence-transformers"], specifier = ">=0.22.0" },
     { name = "tqdm", specifier = ">=4.66" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "jupyterlab", specifier = ">=4.2" }]
 
 [[package]]
 name = "send2trash"
@@ -2907,19 +2908,6 @@ wheels = [
 ]
 
 [[package]]
-name = "sql-redis"
-version = "0.7.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "redis" },
-    { name = "sqlglot" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/25/8a/7fec9f4ff891dfeb271fe18cf67ac2de2e758ee2a473f9ca6f87c43fa100/sql_redis-0.7.1.tar.gz", hash = "sha256:be0e510afe75c5f023eedfc08b388db809fd5448ee322fb4e2b1ab7604a563c6", size = 240738 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/03/0333cd203c68295fdee7f15120c50b84c23cc278e4c8a5a12e07c52cf8bc/sql_redis-0.7.1-py3-none-any.whl", hash = "sha256:2d42c116711f73d977d195948dcf03aecd8ee6b993905ab8a9139338d116a5a9", size = 52613 },
-]
-
-[[package]]
 name = "sqlalchemy"
 version = "2.0.51"
 source = { registry = "https://pypi.org/simple" }
@@ -2944,15 +2932,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3c/b7/c5ffe50aa2f4d947c9250e1519d939260329a07fe6272edfccd784b3d007/sqlalchemy-2.0.51-cp312-cp312-win32.whl", hash = "sha256:9f380393be5abeb6815f68fd39271b95127173511b6706b0a630a9995d53f8f5", size = 2119674 },
     { url = "https://files.pythonhosted.org/packages/25/dc/46a65916af68a06ef6b972c6050ba4c8f97070fe3fb33097d34229d9bef6/sqlalchemy-2.0.51-cp312-cp312-win_amd64.whl", hash = "sha256:2cf39aabdf48e87c1c2c2ed6d20d33ffa0733b3071ce9c5f66357947dd009080", size = 2146670 },
     { url = "https://files.pythonhosted.org/packages/e2/22/dbf013a12ec759e54a34a119e9e217435b3f71b2dd5c61a7ade0a25dae87/sqlalchemy-2.0.51-py3-none-any.whl", hash = "sha256:bb024d8b621d0be75f4f44ecc7c950450026e76d66dc8f791bb5331d7fed59d5", size = 1944334 },
-]
-
-[[package]]
-name = "sqlglot"
-version = "30.12.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/43/ed/a6c45aec29353b6392ea34548c40af3ac6ffd6bc5572cf23b2ce250876fc/sqlglot-30.12.0.tar.gz", hash = "sha256:6b8369704662d4f654bc934cea4dd31c916c2a571b389210cb9e951a275e5fd9", size = 5905110 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/9e/82a390ecc85f066ff80affa01d195f744e3de60ad4d695b8de31c9a66da3/sqlglot-30.12.0-py3-none-any.whl", hash = "sha256:86cccc610073c645c03e72b55b60ae0518aa3253a7fc3bd56551370d003c6554", size = 707583 },
 ]
 
 [[package]]

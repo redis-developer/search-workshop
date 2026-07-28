@@ -1,15 +1,20 @@
 # Product Search Relevance with RedisVL
 
-One-hour engineering workshop for building and evaluating ecommerce product search with RedisVL, Redis Search, WANDS relevance judgments, and Redis Retrieval Optimizer.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb)
+[View the notebook on GitHub](https://github.com/redis-developer/search-workshop/blob/main/notebook.ipynb)
+
+One-hour engineering workshop for building and evaluating e-commerce product search with RedisVL, Redis Query Engine, WANDS relevance judgments, and Redis Retrieval Optimizer.
 
 Participants prepare real product-search data, embed product records, index them in Redis, compare retrieval patterns, and use graded relevance labels to choose the next experiment.
 
 ## What You Will Build
 
-- A deterministic WANDS product-search sample for live workshop use.
+- The complete WANDS product corpus, query set, and relevance judgments.
 - A `search_text` field built from product names, classes, hierarchy, descriptions, and features.
+- A practical model-sourcing comparison across hosted APIs, open-weight models, and fine-tuning.
 - A RedisVL index with text, tag, numeric, and vector fields.
-- Vector, filtered vector, hybrid, faceted, numeric, and SQL-like query examples.
+- A clear under-the-hood comparison of `FLAT`, `HNSW`, and `SVS-VAMANA`.
+- Vector, tag-filtered vector, numeric-filtered vector, and hybrid query examples.
 - A relevance loop with nDCG@10, Recall@25, and query time.
 - A Redis Retrieval Optimizer search study with custom parameterized methods.
 - A practical `FT.HYBRID` comparison across RRF and linear text/vector weights.
@@ -19,20 +24,34 @@ Participants prepare real product-search data, embed product records, index them
 
 | Time | Section | Outcome |
 |---:|---|---|
-| 0-10 min | Setup and WANDS sample | Data roles are clear: corpus, queries, and qrels. |
-| 10-25 min | Embeddings and RedisVL index | Products are embedded, loaded as Redis hashes, and indexed. |
-| 25-40 min | Query patterns | Participants compare vector, filtered, hybrid, facets, numeric filters, and SQL-like lookup. |
+| 0-8 min | Setup and WANDS data | Data roles are clear: corpus, queries, and qrels. |
+| 8-16 min | Embeddings | Participants understand the vector representation and model sourcing choices. |
+| 16-25 min | Vector indexes and load | Participants compare index internals, then build the live `FLAT` index. |
+| 25-37 min | Query patterns | Participants compare vector, tag- and numeric-filtered vector, and hybrid retrieval. |
+| 37-40 min | Production benchmark plan | The group separates ANN Recall@k from product relevance and defines a fair index comparison. |
 | 40-55 min | Evaluation and optimizer | Results move from visual inspection to measured relevance. |
 | 55-60 min | Recommendation | The group leaves with a concrete next production experiment. |
 
-## Prerequisites
+## Run in Google Colab
 
-- Python 3.11 or 3.12
-- `uv`
-- Docker, for the local Redis 8.4 server
-- Redis 8.4+ or Redis Cloud with `FT.HYBRID` support for the hybrid query cells
+Open the notebook directly from GitHub:
 
-## Quick Start
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/redis-developer/search-workshop/blob/main/notebook.ipynb)
+
+Run the notebook from the first cell. The bootstrap section:
+
+1. Clones this complete repository into `/content/search-workshop`, including `pyproject.toml`, `.env.example`, and the supporting Python scripts.
+2. Installs the project dependencies from `pyproject.toml`.
+3. Installs the latest Redis `8.6.*` patch from the official Redis APT repository, starts it inside the Colab runtime, and verifies Redis Query Engine and `FT.HYBRID`.
+4. Downloads and prepares WANDS under the cloned repository before the workshop begins.
+
+Colab storage and the local Redis process are ephemeral. After a runtime reset, start again from the bootstrap section. Rerunning the bootstrap cells within one live runtime is safe and reuses the existing repository clone and a healthy Redis process.
+
+The workshop always processes the full WANDS corpus. The first run downloads the dataset and embedding model, then embeds and indexes 42,994 products; a CPU runtime can take several minutes and must remain connected. Redis embedding caches speed up reruns only within the same Colab runtime.
+
+## Run Locally
+
+Local prerequisites are Python 3.11 or 3.12, `uv`, Docker, and Redis 8.6 with `FT.HYBRID` support. The notebook detects that it is outside Colab and leaves Redis startup to Docker Compose or `REDIS_URL`.
 
 ```bash
 uv sync
@@ -43,7 +62,7 @@ uv run python scripts/validate.py
 uv run jupyter lab notebook.ipynb
 ```
 
-Run the notebook top-to-bottom after Redis is reachable. Redis is required because the lab exercises RedisVL and Redis Search directly.
+Run the notebook top-to-bottom after Redis is reachable. The Colab-only setup cell is a no-op locally.
 
 The notebook uses `REDIS_URL` for every Redis client. For a shared classroom Redis instance, give each participant a unique `WORKSHOP_RUN_ID`; that value scopes the index name, key prefix, and embedding cache names.
 
@@ -62,7 +81,7 @@ The validator loads `.env` and pings the target from `REDIS_URL`:
 uv run python scripts/validate.py
 ```
 
-## Data and Modes
+## Data
 
 WANDS is the Wayfair ANnotation Dataset for product search relevance assessment.
 
@@ -71,18 +90,9 @@ WANDS is the Wayfair ANnotation Dataset for product search relevance assessment.
 - Queries: <https://raw.githubusercontent.com/wayfair/WANDS/main/dataset/query.csv>
 - Judgments: <https://raw.githubusercontent.com/wayfair/WANDS/main/dataset/label.csv>
 
-The source files are tab-separated even though they use a `.csv` extension. The full dataset has 42,994 products, 480 queries, and 233,448 raw relevance judgments.
+The source files are tab-separated even though they use a `.csv` extension. The full dataset has 42,994 products, 480 queries, and 233,448 raw label rows. Those rows represent 231,873 unique query-product pairs; preparation keeps the highest observed grade when duplicate rows disagree because qrels require one grade per pair.
 
-The default workshop mode uses a deterministic 600-product, 24-query sample. The sampler is query-first: it prioritizes judged queries and keeps at least one relevant product per query when the product budget allows it. Use this mode for the 60-minute delivery.
-
-Full mode exists for longer validation runs:
-
-```bash
-WORKSHOP_DATASET=full
-uv run python scripts/prep_wands.py --refresh --full
-```
-
-Full mode indexes all 42,994 products and evaluates all loaded queries unless `EVAL_QUERY_LIMIT` is set.
+The workshop always indexes all 42,994 products and evaluates all 480 queries with their available relevance judgments. Dataset size and evaluation coverage are not configurable workshop options.
 
 WANDS often has many relevant products per query. The notebook shows judgment-density statistics before scoring retrieval methods so Recall@25 is interpreted as a coverage guardrail, not a standalone quality grade.
 
@@ -91,7 +101,7 @@ Generated WANDS files live under `data/`, which is local and ignored by git.
 ## Data Prep Commands
 
 ```bash
-# Build or reuse the default local sample
+# Build or reuse the complete local dataset
 uv run python scripts/prep_wands.py
 
 # Show source URLs
@@ -101,26 +111,25 @@ uv run python scripts/prep_wands.py --list-sources
 uv run python scripts/prep_wands.py --refresh
 ```
 
-Adjust `SAMPLE_PRODUCT_COUNT` and `SAMPLE_QUERY_COUNT` in `.env` for a larger local sample. Larger samples improve evaluation realism but increase embedding and indexing time.
-
 ## Environment Knobs
 
 | Variable | Purpose |
 |---|---|
 | `REDIS_URL` | Redis connection string for local Redis or Redis Cloud. |
 | `WORKSHOP_RUN_ID` | Namespaces the Redis index, product keys, and embedding caches. |
-| `WORKSHOP_DATASET` | `sample` for the live workshop, `full` for full WANDS runs. |
 | `REDIS_LOAD_BATCH_SIZE` | Products written to Redis per retryable load chunk. |
 | `EMBEDDING_CHUNK_SIZE` | Progress-logging chunk size around embedding generation. |
 | `EMBEDDING_BATCH_SIZE` | Batch size passed into the embedding model. |
-| `EVAL_QUERY_LIMIT` | Blank means 8 search-study queries in sample mode and all loaded queries in full mode. |
-| `HF_MODEL` | HuggingFace sentence-transformer used for query and product embeddings. |
+| `HF_MODEL` | Hugging Face Sentence Transformer used for query and product embeddings. Changing it normally requires re-embedding and rebuilding the index. |
 
 ## Operational Notes
 
 - The notebook recreates the workshop index with `overwrite=True, drop=True`; use workshop-specific names only.
 - RedisVL's embedding cache is stored in Redis with no TTL. Reruns are faster after the first embedding pass, and `WORKSHOP_RUN_ID` prevents participant collisions.
-- The live path uses `FLAT` vector search because it is exact and easy to explain on a small sample. The notebook includes `HNSW` and `SVS-VAMANA` attributes as follow-on benchmark options.
+- Both the Colab APT setup and local Docker service stay on Redis `8.6.*` while accepting patch updates within that minor release. The executable path builds `FLAT` across full WANDS so retrieval-method comparisons use exact nearest neighbors; the notebook explains HNSW and SVS-VAMANA and provides their schema attributes for a follow-on benchmark.
+- Hosted and local embedding providers are introduced as model sourcing choices. The executable path remains local and credential-free with `sentence-transformers/all-MiniLM-L6-v2`.
+- Fine-tuning is presented as a measured follow-on only when held-out judgments show repeatable domain errors; it is not part of the one-hour execution path.
+- Intel-specific SVS-VAMANA compression benefits depend on the Redis edition and CPU. Record the environment in any index benchmark.
 - Redis Retrieval Optimizer's built-in methods are fixed, but the notebook uses its `search_method_map` extension point to register parameterized methods. That keeps BM25, vector search, `FT.HYBRID` RRF, and `FT.HYBRID` linear weight comparisons inside one search study.
 
 ## Validate
@@ -129,6 +138,6 @@ Adjust `SAMPLE_PRODUCT_COUNT` and `SAMPLE_QUERY_COUNT` in `.env` for a larger lo
 uv run python scripts/validate.py
 ```
 
-The validator checks the repo shape, parses the notebook, compiles the scripts, verifies required `.env.example` keys, and pings Redis when the Python Redis client is installed.
+The validator checks the repo shape, Colab launch contract and setup order, project dependency groups, notebook content, scripts, required `.env.example` keys, and the Redis version and Search capability when Redis is reachable.
 
 If `data/` is absent, validation remains valid and prints an informational message. Run `uv run python scripts/prep_wands.py` before the notebook to create the local WANDS artifacts.

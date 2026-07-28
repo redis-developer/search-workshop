@@ -15,8 +15,8 @@ Participants prepare real product-search data, embed product records, index them
 - A RedisVL index with text, tag, numeric, and vector fields.
 - A clear under-the-hood comparison of `FLAT`, `HNSW`, and `SVS-VAMANA`.
 - Vector, tag-filtered vector, numeric-filtered vector, and hybrid query examples.
-- A relevance loop with nDCG@10, Recall@25, and query time.
-- A Redis Retrieval Optimizer search study with custom parameterized methods.
+- One relevance scorecard with nDCG@10, Recall@25, Precision@25, and Redis query time.
+- A Redis Retrieval Optimizer search study with imported, parameterized method adapters.
 - A practical `FT.HYBRID` comparison across RRF and linear text/vector weights.
 - A production-oriented recommendation for the next benchmark.
 
@@ -40,7 +40,7 @@ Open the notebook directly from GitHub:
 
 Run the notebook from the first cell. The bootstrap section:
 
-1. Clones the `colab-migration` branch into `/content/search-workshop`, including `pyproject.toml`, `.env.example`, and the supporting Python scripts.
+1. Clones the `colab-migration` branch into `/content/search-workshop`, including `pyproject.toml`, `.env.example`, the data-preparation code, and the search-study adapter.
 2. Installs the project dependencies from `pyproject.toml`.
 3. Runs `scripts/setup_colab_redis.py` to install the latest Redis `8.6.*` patch, start it inside the Colab runtime, and verify Search, RedisJSON, `FT.HYBRID`, and `JSON.GET`.
 4. Downloads and prepares WANDS under the cloned repository before the workshop begins.
@@ -94,7 +94,7 @@ The source files are tab-separated even though they use a `.csv` extension. The 
 
 The workshop always indexes all 42,994 products and evaluates all 480 queries with their available relevance judgments. Dataset size and evaluation coverage are not configurable workshop options.
 
-WANDS often has many relevant products per query. The notebook shows judgment-density statistics before scoring retrieval methods so Recall@25 is interpreted as a coverage guardrail, not a standalone quality grade.
+WANDS often has many relevant products per query. The notebook defines Recall@25 as a coverage guardrail and explains its natural ceiling before scoring retrieval methods.
 
 Generated WANDS files live under `data/`, which is local and ignored by git.
 
@@ -130,7 +130,7 @@ uv run python scripts/prep_wands.py --refresh
 - Hosted and local embedding providers are introduced as model sourcing choices. The executable path remains local and credential-free with `sentence-transformers/all-MiniLM-L6-v2`.
 - Fine-tuning is presented as a measured follow-on only when held-out judgments show repeatable domain errors; it is not part of the one-hour execution path.
 - Intel-specific SVS-VAMANA compression benefits depend on the Redis edition and CPU. Record the environment in any index benchmark.
-- Redis Retrieval Optimizer's built-in methods are fixed, but the notebook uses its `search_method_map` extension point to register parameterized methods. That keeps BM25, vector search, `FT.HYBRID` RRF, and `FT.HYBRID` linear weight comparisons inside one search study.
+- Redis Retrieval Optimizer's built-in methods are fixed, so `scripts/workshop_search_study.py` uses its `search_method_map` extension point for the workshop candidates. The notebook stays focused on the experiment and imports the RedisVL-to-`ranx` adapter instead of redefining it inline.
 
 ## Validate
 

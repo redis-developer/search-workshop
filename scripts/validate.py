@@ -21,6 +21,7 @@ REQUIRED_PATHS = [
     "notebook.ipynb",
     "scripts/prep_wands.py",
     "scripts/setup_colab_redis.py",
+    "scripts/workshop_search_study.py",
     "scripts/validate.py",
 ]
 
@@ -90,6 +91,7 @@ def check_scripts_compile() -> None:
     for rel in (
         "scripts/prep_wands.py",
         "scripts/setup_colab_redis.py",
+        "scripts/workshop_search_study.py",
         "scripts/validate.py",
     ):
         source = (ROOT / rel).read_text(encoding="utf-8")
@@ -116,6 +118,7 @@ def check_notebook() -> None:
         "/content/search-workshop",
         "%pip install -q .",
         "scripts/setup_colab_redis.py",
+        "scripts/workshop_search_study.py",
         "from scripts.setup_colab_redis import",
         "setup_colab_redis()",
         "JSON.GET",
@@ -129,11 +132,16 @@ def check_notebook() -> None:
         "Hosted embedding API",
         "Fine-tuned embedding model",
         "ANN Recall@k",
-        "Redis Query Engine",
-        "Read the Scorecard",
+        "Redis Search",
+        "Define the Scorecard Once",
         "Reference Guide",
         "nDCG@10",
         "Recall@25",
+        "Precision@25",
+        "avg_redis_query_ms",
+        "from scripts.workshop_search_study import run_workshop_search_study",
+        "selected_files['queries']",
+        "selected_files['qrels']",
         "WORKSHOP_RUN_ID",
         "Production checklist",
         "recommendation",
@@ -146,11 +154,52 @@ def check_notebook() -> None:
     install_cell = next((i for i, value in enumerate(cell_text) if "%pip install -q ." in value), None)
     redis_setup_cell = next((i for i, value in enumerate(cell_text) if "setup_colab_redis()" in value), None)
     support_import_cell = next((i for i, value in enumerate(cell_text) if "from scripts.prep_wands import" in value), None)
-    ordered_cells = (clone_cell, install_cell, redis_setup_cell, support_import_cell)
+    study_import_cell = next(
+        (
+            i
+            for i, value in enumerate(cell_text)
+            if "from scripts.workshop_search_study import" in value
+        ),
+        None,
+    )
+    ordered_cells = (
+        clone_cell,
+        install_cell,
+        redis_setup_cell,
+        support_import_cell,
+        study_import_cell,
+    )
     if any(index is None for index in ordered_cells):
         fail("Notebook is missing one or more ordered Colab setup cells")
     if list(ordered_cells) != sorted(ordered_cells):
         fail("Notebook must clone artifacts, install dependencies, start Redis, and then import support code")
+
+    legacy_adapter_terms = (
+        "def rows_to_scores",
+        "def run_query_method",
+        "def make_hybrid_method",
+        "study_queries_path",
+        "study_qrels_path",
+        "avg_query_ms",
+    )
+    leaked_terms = [term for term in legacy_adapter_terms if term in text]
+    if leaked_terms:
+        fail(
+            "Optimizer adapter and duplicate artifact code must stay out of the "
+            f"notebook: {', '.join(leaked_terms)}"
+        )
+
+    for metric_row in (
+        "| nDCG@10 |",
+        "| Recall@25 |",
+        "| Precision@25 |",
+        "| Average Redis query time (`avg_redis_query_ms`) |",
+    ):
+        if text.count(metric_row) != 1:
+            fail(
+                "Each canonical scorecard definition must appear exactly once; "
+                f"found {text.count(metric_row)} occurrences of {metric_row}"
+            )
 
     display_name = notebook.get("metadata", {}).get("kernelspec", {}).get("display_name")
     if display_name != "Python 3":
@@ -172,6 +221,25 @@ def check_colab_redis_script() -> None:
     ):
         if term not in setup_script:
             fail(f"Colab Redis setup script is missing required term: {term}")
+
+
+def check_workshop_search_study_script() -> None:
+    study_script = (ROOT / "scripts" / "workshop_search_study.py").read_text(
+        encoding="utf-8"
+    )
+    for term in (
+        'SCORECARD_METRICS = ("ndcg@10", "recall@25", "precision@25")',
+        "LINEAR_TEXT_WEIGHTS = (0.25, 0.50, 0.75)",
+        "def run_workshop_search_study(",
+        '"avg_redis_query_ms"',
+        "RedisJSONPath.root_path()",
+        "NumbaTypeSafetyWarning",
+        '"bm25_text"',
+        '"vector_cosine"',
+        '"hybrid_rrf"',
+    ):
+        if term not in study_script:
+            fail(f"Workshop search-study helper is missing required term: {term}")
 
 
 def check_documentation() -> None:
@@ -274,6 +342,7 @@ def main() -> None:
     check_scripts_compile()
     check_notebook()
     check_colab_redis_script()
+    check_workshop_search_study_script()
     check_documentation()
     check_project_metadata()
     check_env_example()

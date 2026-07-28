@@ -9,48 +9,12 @@ from time import perf_counter
 from typing import Any, Mapping, Sequence
 import warnings
 
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 from redisvl.query import HybridQuery, TextQuery, VectorQuery
 
-
-METRIC_DEFINITIONS = (
-    (
-        "nDCG@10",
-        "ndcg_at_k(..., k=10)",
-        "Graded quality in the first 10 results using the Järvelin formulation: "
-        "Exact=2, Partial=1, Irrelevant or unjudged=0. Normalized to 0-1.",
-        "Primary relevance metric; higher is better.",
-    ),
-    (
-        "Recall@25",
-        "recall_at_k(..., k=25)",
-        "Judged-positive products found in the first 25 divided by all "
-        "judged-positive products for that query.",
-        "Candidate-coverage guardrail; higher is better.",
-    ),
-    (
-        "Precision@25",
-        "precision_at_k(..., k=25)",
-        "Judged-positive products in the first 25 divided by 25. Unjudged "
-        "products receive no offline relevance credit.",
-        "Noise diagnostic; higher is better.",
-    ),
-    (
-        "Redis query latency",
-        "latency_bands_ms(...)",
-        "Wall-clock index.query time summarized as mean, p50, p95, and p99 "
-        "milliseconds. Embedding is excluded.",
-        "Relative local latency signal; lower is better.",
-    ),
-    (
-        "nDCG wins",
-        "query_win_counts(...)",
-        "Queries where a strategy ties for the highest nDCG@10 among the "
-        "compared strategies.",
-        "Head-to-head breadth diagnostic; higher is better.",
-    ),
-)
 
 DEFAULT_CANDIDATES = {
     "bm25_text": ("text", None),
@@ -73,13 +37,22 @@ SCORECARD_COLUMNS = (
     "p99_latency_ms",
 )
 
+STRATEGY_LABELS = {
+    "bm25_text": "BM25 text",
+    "vector_cosine": "Vector cosine",
+    "hybrid_rrf": "Hybrid RRF",
+    "hybrid_linear_text_025": "Linear · 25% text",
+    "hybrid_linear_text_050": "Linear · 50% text",
+    "hybrid_linear_text_075": "Linear · 75% text",
+}
 
-def metric_definitions_frame() -> pd.DataFrame:
-    """Return the canonical metric definitions shown by the notebook."""
-    return pd.DataFrame(
-        METRIC_DEFINITIONS,
-        columns=["metric", "function", "definition", "use"],
-    )
+STRATEGY_COLORS = {
+    "vector_cosine": "#59636E",
+    "hybrid_rrf": "#DC382D",
+    "hybrid_linear_text_025": "#F7A58D",
+    "hybrid_linear_text_050": "#EE7257",
+    "hybrid_linear_text_075": "#B92D24",
+}
 
 
 def _discounted_gain(relevance: Sequence[float]) -> float:
@@ -94,7 +67,7 @@ def ndcg_at_k(
     ranked_ids: Sequence[str],
     k: int = 10,
 ) -> float:
-    """Return Järvelin nDCG@k using graded relevance judgments."""
+    """Compute nDCG@k."""
     observed = [float(judgments.get(doc_id, 0)) for doc_id in ranked_ids[:k]]
     ideal = sorted(
         (float(grade) for grade in judgments.values() if grade > 0),
@@ -109,7 +82,7 @@ def recall_at_k(
     ranked_ids: Sequence[str],
     k: int = 25,
 ) -> float:
-    """Return the fraction of all judged-positive documents found by rank k."""
+    """Compute Recall@k."""
     relevant = {doc_id for doc_id, grade in judgments.items() if grade > 0}
     return len(relevant & set(ranked_ids[:k])) / len(relevant) if relevant else 0.0
 
@@ -119,7 +92,7 @@ def precision_at_k(
     ranked_ids: Sequence[str],
     k: int = 25,
 ) -> float:
-    """Return judged-positive documents in the first k ranks divided by k."""
+    """Compute Precision@k."""
     if k <= 0:
         raise ValueError("k must be positive.")
     return sum(judgments.get(doc_id, 0) > 0 for doc_id in ranked_ids[:k]) / k
@@ -153,6 +126,85 @@ def query_win_counts(per_query: pd.DataFrame) -> dict[str, int]:
         str(name): int(count)
         for name, count in winners.groupby("search_method").size().items()
     }
+
+
+def plot_query_ndcg_deltas(
+    per_query: pd.DataFrame,
+    baseline: str = "bm25_text",
+) -> Figure:
+    """Plot per-query nDCG@10 changes relative to one baseline strategy."""
+    required = {"query_id", "search_method", "ndcg@10"}
+    if missing := required - set(per_query.columns):
+        raise ValueError(f"Per-query results are missing columns: {sorted(missing)}")
+
+    scores = per_query.pivot(
+        index="query_id",
+        columns="search_method",
+        values="ndcg@10",
+    )
+    if baseline not in scores:
+        raise ValueError(f"Baseline strategy is missing: {baseline}")
+
+    comparisons = [
+        name
+        for name in DEFAULT_CANDIDATES
+        if name != baseline and name in scores
+    ]
+    if not comparisons:
+        raise ValueError("At least one non-baseline strategy is required.")
+
+    deltas = scores[comparisons].subtract(scores[baseline], axis=0)
+    order = deltas.mean().sort_values().index.tolist()
+    values = [deltas[name].dropna().to_numpy() for name in order]
+    positions = np.arange(1, len(order) + 1)
+
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    boxes = ax.boxplot(
+        values,
+        positions=positions,
+        vert=False,
+        widths=0.56,
+        patch_artist=True,
+        showfliers=False,
+        tick_labels=[STRATEGY_LABELS.get(name, name) for name in order],
+        medianprops={"color": "#161616", "linewidth": 1.5},
+        whiskerprops={"color": "#737373", "linewidth": 1.1},
+        capprops={"color": "#737373", "linewidth": 1.1},
+    )
+    for box, name in zip(boxes["boxes"], order):
+        box.set_facecolor(STRATEGY_COLORS.get(name, "#DC382D"))
+        box.set_alpha(0.82)
+        box.set_edgecolor("none")
+
+    means = [float(deltas[name].mean()) for name in order]
+    ax.scatter(
+        means,
+        positions,
+        color="#161616",
+        marker="D",
+        s=30,
+        zorder=3,
+        label="Mean",
+    )
+    ax.axvline(0, color="#161616", linewidth=1.2)
+    ax.grid(axis="x", color="#E1E1E1", linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.set_title(
+        "How each strategy changes first-page ranking quality",
+        loc="left",
+        fontsize=15,
+        fontweight="bold",
+        pad=14,
+    )
+    ax.set_xlabel(
+        "Per-query Δ nDCG@10 versus BM25  ·  positive values are better",
+        labelpad=10,
+    )
+    ax.legend(frameon=False, loc="lower right")
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
+    fig.tight_layout()
+    return fig
 
 
 def _document_ids(rows: Sequence[Mapping[str, Any]], id_field: str) -> list[str]:

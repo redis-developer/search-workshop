@@ -16,7 +16,7 @@ Participants prepare real product-search data, embed product records, index them
 - A clear under-the-hood comparison of `FLAT`, `HNSW`, and `SVS-VAMANA`.
 - Vector, tag-filtered vector, numeric-filtered vector, and hybrid query examples.
 - Explicit metric functions for nDCG@10, Recall@25, and Precision@25.
-- One head-to-head scorecard with relevance, query wins, and mean/p50/p95/p99 Redis latency.
+- One query-level comparison plot and a head-to-head scorecard with relevance, query wins, and mean/p50/p95/p99 Redis latency.
 - A practical `FT.HYBRID` comparison across RRF and linear text/vector weights.
 - A production-oriented recommendation for the next benchmark.
 

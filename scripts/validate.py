@@ -130,6 +130,9 @@ def check_notebook() -> None:
         "filtered vector",
         "Numeric Filter",
         "hybrid",
+        "#### `FLAT`",
+        "#### `HNSW`",
+        "#### `SVS-VAMANA`",
         "SVS-VAMANA",
         "Hosted embedding API",
         "Fine-tuned embedding model",
@@ -137,15 +140,12 @@ def check_notebook() -> None:
         "Redis Search",
         "Waiting for Redis Search background indexing to finish",
         "Evaluate Six Ranking Strategies Head to Head",
-        "Define the Metrics as Functions",
-        "RANKING_METRICS",
-        "metric_definitions_frame",
+        "Ranking Metrics",
+        "#### nDCG@10",
+        "#### Recall@25",
+        "#### Precision@25",
+        "plot_query_ndcg_deltas",
         "run_search_comparison",
-        "mean_latency_ms",
-        "p50_latency_ms",
-        "p95_latency_ms",
-        "p99_latency_ms",
-        "ndcg_wins",
         "Draw Conclusions",
         "Reference Guide",
         "nDCG@10",
@@ -208,6 +208,38 @@ def check_notebook() -> None:
     if text.count("from scripts.search_evaluation import") != 1:
         fail("Notebook must import the canonical evaluation module exactly once")
 
+    index_cell = next(
+        (
+            value
+            for cell, value in zip(notebook.get("cells", []), cell_text)
+            if cell.get("id") == "f6434a45"
+        ),
+        None,
+    )
+    if index_cell is None:
+        fail("Notebook is missing its vector-index comparison cell")
+    if "|" in index_cell:
+        fail("Vector index types must use readable subsections, not a table")
+    for heading in ("#### `FLAT`", "#### `HNSW`", "#### `SVS-VAMANA`"):
+        if text.count(heading) != 1:
+            fail(f"Vector index type must have exactly one subsection: {heading}")
+
+    metric_cell = next(
+        (
+            value
+            for cell, value in zip(notebook.get("cells", []), cell_text)
+            if cell.get("id") == "evaluation-scorecard"
+        ),
+        None,
+    )
+    if metric_cell is None:
+        fail("Notebook is missing its canonical ranking-metrics cell")
+    if "|" in metric_cell:
+        fail("Ranking metrics must be explained in prose, not a generated table")
+    for heading in ("#### nDCG@10", "#### Recall@25", "#### Precision@25"):
+        if text.count(heading) != 1:
+            fail(f"Ranking metric must have exactly one canonical heading: {heading}")
+
     display_name = notebook.get("metadata", {}).get("kernelspec", {}).get("display_name")
     if display_name != "Python 3":
         fail("Notebook kernelspec display name must be Python 3 for Colab portability")
@@ -234,13 +266,13 @@ def check_search_evaluation_script() -> None:
         encoding="utf-8"
     )
     for term in (
-        "METRIC_DEFINITIONS = (",
         "RANKING_METRICS = {",
         "def ndcg_at_k(",
         "def recall_at_k(",
         "def precision_at_k(",
         "def latency_bands_ms(",
         "def query_win_counts(",
+        "def plot_query_ndcg_deltas(",
         "def run_search_comparison(",
         "def summarize_comparison(",
         '"bm25_text"',
@@ -256,6 +288,10 @@ def check_search_evaluation_script() -> None:
     ):
         if term not in evaluation_script:
             fail(f"Search-evaluation helper is missing required term: {term}")
+
+    for removed_term in ("METRIC_DEFINITIONS", "metric_definitions_frame"):
+        if removed_term in evaluation_script:
+            fail(f"Generated metric-definition table must stay removed: {removed_term}")
 
     from search_evaluation import (
         DEFAULT_CANDIDATES,
@@ -309,6 +345,8 @@ def check_project_metadata() -> None:
             fail(f"Removed evaluation dependency remains in pyproject.toml: {dependency}")
     if any(dependency.lower().startswith("jupyterlab") for dependency in runtime_dependencies):
         fail("JupyterLab must not be a Colab runtime dependency")
+    if not any(dependency.lower().startswith("matplotlib") for dependency in runtime_dependencies):
+        fail("Matplotlib must be a runtime dependency for the benchmark visualization")
 
     lock_text = (ROOT / "uv.lock").read_text(encoding="utf-8")
     for package_name in removed_dependencies:
